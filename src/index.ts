@@ -134,15 +134,64 @@ export default function (pi: ExtensionAPI) {
   // ── Config setup flow ─────────────────────────────────────────
 
   async function setupAdvisorConfig(ctx: ExtensionContext) {
-    const providers = ctx.modelRegistry.getAllProviders();
-    const providerNames = providers.map((p) => p.id);
-    const provider = await ctx.ui.select("Select advisor provider:", providerNames);
-    if (!provider) return;
+    let availableModels: Array<{ provider: string; id: string; name?: string }> = [];
 
-    const models = ctx.modelRegistry.getModels(provider);
-    const modelNames = models.map((m) => m.id);
-    const model = await ctx.ui.select(`Select model for ${provider}:`, modelNames);
-    if (!model) return;
+    // Try to reuse pi's already-configured models
+    try {
+      const registry = ctx.modelRegistry as any;
+      if (typeof registry.getAvailable === "function") {
+        const available = await registry.getAvailable();
+        availableModels = (available as any[]).map((m: any) => ({
+          provider: m.provider || "unknown",
+          id: m.id,
+          name: m.name,
+        }));
+      }
+    } catch {
+      // Fall back to manual entry
+    }
+
+    let provider: string;
+    let model: string;
+
+    if (availableModels.length > 0) {
+      // Group by provider and present options
+      const choices = availableModels.map((m) => ({
+        value: `${m.provider}/${m.id}`,
+        label: m.name ? `${m.name} (${m.provider}/${m.id})` : `${m.provider}/${m.id}`,
+        description: m.provider,
+      }));
+      choices.push({ value: "__custom__", label: "Other (enter manually)...", description: "" });
+
+      const choice = await ctx.ui.select("Select advisor model:", choices);
+      if (!choice) return;
+
+      if (choice === "__custom__") {
+        provider = (await ctx.ui.input("Advisor provider:", "e.g. anthropic")) ?? "";
+        if (!provider) return;
+        model = (await ctx.ui.input(`Model ID for ${provider}:`, "e.g. claude-sonnet-4-5")) ?? "";
+        if (!model) return;
+      } else {
+        const [p, m] = choice.split("/");
+        provider = p;
+        model = m;
+      }
+    } else {
+      // No models available from registry, fall back to manual entry
+      provider = (await ctx.ui.input("Advisor provider:", "e.g. anthropic, openai")) ?? "";
+      if (!provider) return;
+      model = (await ctx.ui.input(`Model ID for ${provider}:`, "e.g. claude-sonnet-4-5")) ?? "";
+      if (!model) return;
+
+      const found = ctx.modelRegistry.find(provider, model);
+      if (!found) {
+        const proceed = await ctx.ui.confirm(
+          "Model not found",
+          `${provider}/${model} was not found in the model registry. Save anyway?`,
+        );
+        if (!proceed) return;
+      }
+    }
 
     const thinkingChoices = [
       { value: "__default__", label: "default (model default)" },
