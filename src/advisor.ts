@@ -1,5 +1,5 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import { complete, type Message } from "@earendil-works/pi-ai";
+import { completeSimple, type Message } from "@earendil-works/pi-ai";
 import {
   convertToLlm,
   serializeConversation,
@@ -27,8 +27,9 @@ function entryToMessage(entry: SessionEntry): AgentMessage | undefined {
 /**
  * Walk the current branch and convert entries to messages for the advisor.
  * Handles compaction entries by including the summary.
+ * Respects maxContextMessages config to limit context size.
  */
-function getBranchMessages(branch: SessionEntry[]): AgentMessage[] {
+function getBranchMessages(branch: SessionEntry[], maxMessages?: number): AgentMessage[] {
   let compactionIndex = -1;
   for (let i = branch.length - 1; i >= 0; i--) {
     if (branch[i].type === "compaction") {
@@ -37,29 +38,39 @@ function getBranchMessages(branch: SessionEntry[]): AgentMessage[] {
     }
   }
 
+  let messages: AgentMessage[];
+
   if (compactionIndex < 0) {
-    return branch
+    messages = branch
+      .map(entryToMessage)
+      .filter((m): m is AgentMessage => m !== undefined);
+  } else {
+    const compaction = branch[compactionIndex];
+    const firstKeptIndex =
+      compaction.type === "compaction"
+        ? branch.findIndex((e) => e.id === compaction.firstKeptEntryId)
+        : -1;
+
+    const compactedBranch = [
+      compaction,
+      ...(firstKeptIndex >= 0
+        ? branch.slice(firstKeptIndex, compactionIndex)
+        : []),
+      ...branch.slice(compactionIndex + 1),
+    ];
+
+    messages = compactedBranch
       .map(entryToMessage)
       .filter((m): m is AgentMessage => m !== undefined);
   }
 
-  const compaction = branch[compactionIndex];
-  const firstKeptIndex =
-    compaction.type === "compaction"
-      ? branch.findIndex((e) => e.id === compaction.firstKeptEntryId)
-      : -1;
+  // Trim oldest messages if over the limit (keep the most recent)
+  const limit = maxMessages ?? 50;
+  if (messages.length > limit) {
+    messages = messages.slice(messages.length - limit);
+  }
 
-  const compactedBranch = [
-    compaction,
-    ...(firstKeptIndex >= 0
-      ? branch.slice(firstKeptIndex, compactionIndex)
-      : []),
-    ...branch.slice(compactionIndex + 1),
-  ];
-
-  return compactedBranch
-    .map(entryToMessage)
-    .filter((m): m is AgentMessage => m !== undefined);
+  return messages;
 }
 
 export interface AdvisorResult {
@@ -70,6 +81,45 @@ export interface AdvisorResult {
     cost: number;
     model?: string;
   };
+}
+
+/**
+ * Retry a function with exponential backoff for transient errors.
+ * Retries on network errors, rate limits (429), and server errors (5xx).
+ */
+async function retryWithBackoff<T>(
+  fn: () => Promise<T>,
+  maxRetries: number = 2,
+  signal: AbortSignal,
+): Promise<T> {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      if (attempt === maxRetries || signal.aborted) throw err;
+
+      // Only retry on transient errors
+      const status = err.status ?? err.statusCode ?? 0;
+      const isTransient =
+        status === 429 || (status >= 500 && status < 600) ||
+        err.code === "ECONNRESET" || err.code === "ETIMEDOUT" ||
+        err.type === "rate_limit" || err.type === "server_error";
+
+      if (!isTransient) throw err;
+
+      const delay = Math.min(1000 * Math.pow(2, attempt), 4000);
+      await new Promise((resolve) => {
+        const timer = setTimeout(resolve, delay);
+        signal.addEventListener("abort", () => {
+          clearTimeout(timer);
+          resolve(undefined);
+        }, { once: true });
+      });
+
+      if (signal.aborted) throw err;
+    }
+  }
+  throw new Error("unreachable");
 }
 
 /**
@@ -100,7 +150,7 @@ export async function callAdvisor(
   }
 
   // Build conversation context
-  const messages = getBranchMessages(branch);
+  const messages = getBranchMessages(branch, config.maxContextMessages);
   const llmMessages = convertToLlm(messages);
   const conversationText = serializeConversation(llmMessages);
 
@@ -118,14 +168,24 @@ export async function callAdvisor(
     timestamp: Date.now(),
   };
 
-  const response = await complete(
-    model,
-    { systemPrompt, messages: [userMessage] },
-    {
-      apiKey: auth.apiKey,
-      headers: auth.headers,
-      signal,
-    },
+  // Build options with optional thinking level
+  const options: Record<string, unknown> = {
+    apiKey: auth.apiKey,
+    headers: auth.headers,
+    signal,
+  };
+  if (config.thinkingLevel && config.thinkingLevel !== "off") {
+    options.reasoning = config.thinkingLevel;
+  }
+
+  const response = await retryWithBackoff(
+    () => completeSimple(
+      model,
+      { systemPrompt, messages: [userMessage] },
+      options,
+    ),
+    2,
+    signal,
   );
 
   if (response.stopReason === "aborted") {

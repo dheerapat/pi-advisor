@@ -1,13 +1,27 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { Type, type Static } from "typebox";
+import { Value } from "typebox/value";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 
-export interface AdvisorConfig {
-  provider: string;
-  model: string;
-  thinkingLevel?: "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
-  systemPrompt?: string;
-}
+export const AdvisorConfigSchema = Type.Object({
+  provider: Type.String({ minLength: 1 }),
+  model: Type.String({ minLength: 1 }),
+  thinkingLevel: Type.Optional(
+    Type.Union([
+      Type.Literal("off"),
+      Type.Literal("minimal"),
+      Type.Literal("low"),
+      Type.Literal("medium"),
+      Type.Literal("high"),
+      Type.Literal("xhigh"),
+    ]),
+  ),
+  systemPrompt: Type.Optional(Type.String()),
+  maxContextMessages: Type.Optional(Type.Number({ minimum: 1 })),
+});
+
+export type AdvisorConfig = Static<typeof AdvisorConfigSchema>;
 
 const DEFAULT_SYSTEM_PROMPT = `You are an expert programming advisor. You are consulted when a developer is stuck on a hard problem.
 
@@ -25,6 +39,22 @@ Guidelines:
 - If you see a fundamentally better approach, explain why and how to get there`;
 
 /**
+ * Validate a raw config object against the schema.
+ * Logs a clear error if validation fails.
+ */
+function validateConfigShape(raw: unknown, label: string): AdvisorConfig | null {
+  if (!Value.Check(AdvisorConfigSchema, raw)) {
+    for (const error of Value.Errors(AdvisorConfigSchema, raw)) {
+      console.error(
+        `[pi-advisor] Config error in ${label}: ${error.instancePath || "(root)"} — ${error.message}`,
+      );
+    }
+    return null;
+  }
+  return raw as AdvisorConfig;
+}
+
+/**
  * Load advisor config from global and project-local JSON files.
  * Project-local overrides global.
  */
@@ -37,7 +67,8 @@ export function loadConfig(cwd: string): AdvisorConfig | null {
 
   if (existsSync(globalPath)) {
     try {
-      globalConfig = JSON.parse(readFileSync(globalPath, "utf-8"));
+      const raw = JSON.parse(readFileSync(globalPath, "utf-8"));
+      globalConfig = validateConfigShape(raw, "global");
     } catch (err) {
       console.error(`Failed to parse ${globalPath}:`, err);
     }
@@ -45,13 +76,18 @@ export function loadConfig(cwd: string): AdvisorConfig | null {
 
   if (existsSync(projectPath)) {
     try {
-      projectConfig = JSON.parse(readFileSync(projectPath, "utf-8"));
+      const raw = JSON.parse(readFileSync(projectPath, "utf-8"));
+      projectConfig = validateConfigShape(raw, "project");
     } catch (err) {
       console.error(`Failed to parse ${projectPath}:`, err);
     }
   }
 
-  const merged: AdvisorConfig = { ...globalConfig, ...projectConfig } as AdvisorConfig;
+  // Project config overrides global (already applied by spread)
+  const merged: AdvisorConfig = {
+    ...(globalConfig ?? {} as AdvisorConfig),
+    ...(projectConfig ?? {} as AdvisorConfig),
+  } as AdvisorConfig;
 
   if (!merged.provider || !merged.model) {
     return null;

@@ -51,9 +51,16 @@ export default function (pi: ExtensionAPI) {
   // ── /advise command ────────────────────────────────────────────
 
   pi.registerCommand("advise", {
-    description: "Ask the advisor model for guidance on the current problem",
+    description: "Ask the advisor model for guidance on the current problem. Use 'describe' to get a fresh pair of eyes on the conversation.",
     handler: async (args, ctx) => {
-      let question = args?.trim() || "";
+      const trimmed = args?.trim() || "";
+
+      let question = trimmed;
+
+      // /advise describe — send a generic review prompt
+      if (trimmed === "describe") {
+        question = "Review the conversation above. What is the user trying to accomplish? What's the current state? Are there any issues, edge cases, or improvements you can spot? Provide a fresh perspective on the overall situation.";
+      }
 
       if (!question) {
         question =

@@ -8,6 +8,7 @@ Delegate hard problems to a more capable advisor model while working with a chea
 2. **Work** normally with your preferred fast/cheap model
 3. **When stuck**, either:
    - Type `/advise` and describe your problem, or
+   - Type `/advise describe` for a fresh set of eyes on the conversation, or
    - The LLM itself calls `ask_advisor` when it recognizes it's stuck
 
 The advisor model receives the full conversation context and provides expert guidance. It is **read-only** — it has no tools, cannot read files, and cannot make changes. It's a pure consultant.
@@ -54,12 +55,15 @@ Or create the config file manually:
 
 ### Options
 
-| Key             | Required | Description                                        |
-| --------------- | -------- | -------------------------------------------------- |
-| `provider`      | Yes      | Provider ID (e.g., `anthropic`, `openai`)          |
-| `model`         | Yes      | Model ID (e.g., `claude-sonnet-4-5`)               |
-| `thinkingLevel` | No       | `off`, `minimal`, `low`, `medium`, `high`, `xhigh` |
-| `systemPrompt`  | No       | Custom system prompt for the advisor               |
+| Key                  | Required | Description                                        |
+| -------------------- | -------- | -------------------------------------------------- |
+| `provider`           | Yes      | Provider ID (e.g., `anthropic`, `openai`)          |
+| `model`              | Yes      | Model ID (e.g., `claude-sonnet-4-5`)               |
+| `thinkingLevel`      | No       | `off`, `minimal`, `low`, `medium`, `high`, `xhigh` |
+| `systemPrompt`       | No       | Custom system prompt for the advisor               |
+| `maxContextMessages` | No       | Max conversation messages to send (default: 50)    |
+
+Config files are validated on load — malformed entries are logged with clear error messages and ignored, preventing silent failures.
 
 ## Usage
 
@@ -73,17 +77,43 @@ Ask the advisor a question directly.
 
 With no arguments, you'll be prompted to enter your question.
 
+### `/advise describe`
+
+Get a fresh pair of eyes on the entire conversation. Sends a generic review prompt asking the advisor to analyze what you're trying to accomplish, the current state, and any issues or improvements it can spot — useful when you're not sure what to ask.
+
+```
+/advise describe
+```
+
 ### `ask_advisor` tool
 
-The LLM can call this tool when it recognizes it's stuck. It formulates its own question and the advisor responds with guidance.
+The LLM can call this tool when it recognizes it's stuck. It formulates its own question and the advisor responds with guidance. The tool result renders inline in the TUI with expand/collapse and usage stats.
 
 ### `/advisor status`
 
 Show the current advisor configuration.
 
+```
+/advisor status
+```
+
 ### `/advisor config`
 
 Re-run the interactive setup.
+
+```
+/advisor config
+```
+
+## Reliability
+
+- **Retry with backoff:** Transient failures (rate limits, server errors, network drops) are automatically retried up to 2 times with exponential backoff (1s, 2s).
+- **Conversation size guard:** By default, only the most recent 50 messages are sent to the advisor. Configure with `maxContextMessages`.
+- **Config validation:** Config files are validated with Typebox schemas at load time. Bad values are logged and ignored rather than causing cryptic runtime errors.
+
+## Status bar
+
+When configured, the status bar shows `advisor:<provider>/<model>` in the accent color.
 
 ## License
 
