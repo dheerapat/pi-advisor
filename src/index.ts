@@ -163,19 +163,22 @@ export default function (pi: ExtensionAPI) {
       thinkingChoices,
     );
     if (thinkingChoice === undefined) return; // user cancelled
+    const thinkingValue = typeof thinkingChoice === "string" ? thinkingChoice : (thinkingChoice as any)?.value;
 
-    const scope = await ctx.ui.select("Save to:", [
+    const scopeSelection = await ctx.ui.select("Save to:", [
       { value: "project", label: "Project (.pi/advisor.json)" },
       { value: "global", label: "Global (~/.pi/agent/advisor.json)" },
     ]);
+    if (!scopeSelection) return;
+    const scope = typeof scopeSelection === "string" ? scopeSelection : (scopeSelection as any)?.value;
     if (!scope) return;
 
     const newConfig: AdvisorConfig = {
       provider,
       model,
     };
-    if (thinkingChoice && thinkingChoice !== "__default__") {
-      newConfig.thinkingLevel = thinkingChoice as AdvisorConfig["thinkingLevel"];
+    if (thinkingValue && thinkingValue !== "__default__") {
+      newConfig.thinkingLevel = thinkingValue as AdvisorConfig["thinkingLevel"];
     }
 
     const fs = await import("node:fs");
