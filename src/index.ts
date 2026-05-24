@@ -1,5 +1,4 @@
-import type { Api, Model } from "@earendil-works/pi-ai";
-import type { ExtensionAPI, ExtensionContext, ModelRegistry } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { BorderedLoader, type SessionEntry } from "@earendil-works/pi-coding-agent";
 import { Text, Container, Spacer } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
@@ -135,76 +134,19 @@ export default function (pi: ExtensionAPI) {
   // ── Config setup flow ─────────────────────────────────────────
 
   async function setupAdvisorConfig(ctx: ExtensionContext) {
-    let models: Model<Api>[] = [];
+    const provider = (await ctx.ui.input("Advisor provider:", "e.g. anthropic, openai")) ?? "";
+    if (!provider) return;
 
-    // Reuse pi's already-configured models
-    try {
-      models = ctx.modelRegistry.getAvailable();
-    } catch {
-      // Fall back to manual entry
-    }
+    const model = (await ctx.ui.input(`Model ID for ${provider}:`, "e.g. claude-sonnet-4-5")) ?? "";
+    if (!model) return;
 
-    // Resolve provider and id from a model instance (robust against varying shapes)
-    function modelKey(m: Model<Api>): { provider: string; id: string; name?: string; contextWindow: number } {
-      const raw = m as any;
-      // Extract string values from possibly-nested objects or getters
-      const provider =
-        [raw.provider, raw.provider?.id, raw.providerId, ""]
-          .find((v): v is string => typeof v === "string") ?? "";
-      const id =
-        [raw.id, raw.modelId, ""]
-          .find((v): v is string => typeof v === "string") ?? "";
-      const name =
-        [raw.name, raw.displayName]
-          .find((v): v is string => typeof v === "string") ?? undefined;
-      const contextWindow =
-        typeof raw.contextWindow === "number" ? raw.contextWindow : 0;
-      return { provider, id, name, contextWindow };
-    }
-
-    let provider: string;
-    let model: string;
-
-    if (models.length > 0) {
-      // Present models in a select list
-      const choices = models.map((m) => {
-        const key = modelKey(m);
-        return {
-          value: `${key.provider}/${key.id}`,
-          label: key.name ? `${key.name} (${key.provider}/${key.id})` : `${key.provider}/${key.id}`,
-          description: `${key.provider} — context: ${key.contextWindow.toLocaleString()}`,
-        };
-      });
-      choices.push({ value: "__custom__", label: "Other (enter manually)...", description: "" });
-
-      const choice = await ctx.ui.select("Select advisor model:", choices);
-      if (!choice) return;
-
-      if (choice === "__custom__") {
-        provider = (await ctx.ui.input("Advisor provider:", "e.g. anthropic")) ?? "";
-        if (!provider) return;
-        model = (await ctx.ui.input(`Model ID for ${provider}:`, "e.g. claude-sonnet-4-5")) ?? "";
-        if (!model) return;
-      } else {
-        const slashIdx = choice.lastIndexOf("/");
-        provider = choice.slice(0, slashIdx);
-        model = choice.slice(slashIdx + 1);
-      }
-    } else {
-      // No models available from registry, fall back to manual entry
-      provider = (await ctx.ui.input("Advisor provider:", "e.g. anthropic, openai")) ?? "";
-      if (!provider) return;
-      model = (await ctx.ui.input(`Model ID for ${provider}:`, "e.g. claude-sonnet-4-5")) ?? "";
-      if (!model) return;
-
-      const found = ctx.modelRegistry.find(provider, model);
-      if (!found) {
-        const proceed = await ctx.ui.confirm(
-          "Model not found",
-          `${provider}/${model} was not found in the model registry. Save anyway?`,
-        );
-        if (!proceed) return;
-      }
+    const found = ctx.modelRegistry.find(provider, model);
+    if (!found) {
+      const proceed = await ctx.ui.confirm(
+        "Model not found",
+        `${provider}/${model} was not found in the model registry. Save anyway?`,
+      );
+      if (!proceed) return;
     }
 
     const thinkingChoices = [
