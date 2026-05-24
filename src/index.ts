@@ -144,16 +144,37 @@ export default function (pi: ExtensionAPI) {
       // Fall back to manual entry
     }
 
+    // Resolve provider and id from a model instance (robust against varying shapes)
+    function modelKey(m: Model<Api>): { provider: string; id: string; name?: string; contextWindow: number } {
+      const raw = m as any;
+      // Extract string values from possibly-nested objects or getters
+      const provider =
+        [raw.provider, raw.provider?.id, raw.providerId, ""]
+          .find((v): v is string => typeof v === "string") ?? "";
+      const id =
+        [raw.id, raw.modelId, ""]
+          .find((v): v is string => typeof v === "string") ?? "";
+      const name =
+        [raw.name, raw.displayName]
+          .find((v): v is string => typeof v === "string") ?? undefined;
+      const contextWindow =
+        typeof raw.contextWindow === "number" ? raw.contextWindow : 0;
+      return { provider, id, name, contextWindow };
+    }
+
     let provider: string;
     let model: string;
 
     if (models.length > 0) {
       // Present models in a select list
-      const choices = models.map((m) => ({
-        value: `${m.provider}/${m.id}`,
-        label: m.name ? `${m.name} (${m.provider}/${m.id})` : `${m.provider}/${m.id}`,
-        description: `${m.provider} — context: ${m.contextWindow.toLocaleString()}`,
-      }));
+      const choices = models.map((m) => {
+        const key = modelKey(m);
+        return {
+          value: `${key.provider}/${key.id}`,
+          label: key.name ? `${key.name} (${key.provider}/${key.id})` : `${key.provider}/${key.id}`,
+          description: `${key.provider} — context: ${key.contextWindow.toLocaleString()}`,
+        };
+      });
       choices.push({ value: "__custom__", label: "Other (enter manually)...", description: "" });
 
       const choice = await ctx.ui.select("Select advisor model:", choices);
