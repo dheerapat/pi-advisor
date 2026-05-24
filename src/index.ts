@@ -354,33 +354,43 @@ export default function (pi: ExtensionAPI) {
       ? message.content
       : message.content.map(c => c.type === "text" ? c.text : "").join("");
 
+    // Build usage footer
+    const usageFooter = (message.details as any)?.usage
+      ? `\n\n${theme.fg("dim", `↑${(message.details as any).usage.input} · ↓${(message.details as any).usage.output} · $${(message.details as any).usage.cost.toFixed(4)}`)}`
+      : "";
+
     if (expanded) {
       let text =
         theme.fg("accent", theme.bold(`💡 Advisor (${modelName})`)) +
         "\n\n" +
-        theme.fg("toolOutput", contentText);
-
-      if ((message.details as any)?.usage) {
-        const u = (message.details as any).usage;
-        text +=
-          "\n\n" +
-          theme.fg("dim", `↑${u.input} · ↓${u.output} · $${u.cost.toFixed(4)}`);
-      }
+        theme.fg("toolOutput", contentText) +
+        usageFooter;
 
       return new Text(text, 0, 0);
     }
 
-    const preview =
-      contentText.length > 150
-        ? `${contentText.slice(0, 150)}...`
-        : contentText;
-    return new Text(
+    // Collapsed: show generous preview with expand hint
+    const totalLines = contentText.split("\n").length;
+    const previewLines = contentText.split("\n").slice(0, 15);
+    let preview = previewLines.join("\n");
+    let isTruncated = totalLines > 15;
+    if (preview.length > 500) {
+      preview = preview.slice(0, 500) + "...";
+      isTruncated = true;
+    }
+
+    let collapsedText =
       theme.fg("accent", theme.bold(`💡 Advisor (${modelName})`)) +
-        "\n" +
-        theme.fg("dim", preview),
-      0,
-      0,
-    );
+      "\n" +
+      theme.fg("toolOutput", preview);
+
+    if (isTruncated) {
+      collapsedText += "\n" + theme.fg("muted", "(Ctrl+O to expand)");
+    }
+
+    collapsedText += usageFooter;
+
+    return new Text(collapsedText, 0, 0);
   });
 
   // ── Lifecycle ──────────────────────────────────────────────────
