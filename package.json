@@ -2,6 +2,9 @@
   "name": "pi-advisor",
   "version": "0.1.0",
   "description": "Delegate hard problems to a more capable advisor model for guidance",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
   "keywords": [
     "pi-package"
   ],

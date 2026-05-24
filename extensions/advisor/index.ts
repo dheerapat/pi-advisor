@@ -221,8 +221,10 @@ export default function (pi: ExtensionAPI) {
     promptSnippet:
       "Ask the advisor model for help when stuck on a hard problem",
     promptGuidelines: [
-      "When you encounter a difficult problem or are unsure how to proceed, use ask_advisor to get guidance from a more capable model. " +
-        "Formulate a detailed question with specific context about what you're trying to achieve, what you've tried, and where you're stuck.",
+      "Use ask_advisor proactively when stuck or uncertain. Don't spin your wheels — a quick advisor call saves time. " +
+        "Formulate a detailed question with specific context about what you're trying to achieve, what you've tried, and where you're stuck. " +
+        "Good times to ask: after 2+ failed attempts, before large/risky changes, when debugging complex issues, " +
+        "or when facing ambiguous requirements with trade-offs.",
     ],
     parameters: Type.Object({
       question: Type.String({
@@ -412,10 +414,18 @@ export default function (pi: ExtensionAPI) {
       const advisorHint = [
         "",
         "## Advisor Available",
-        `A more capable advisor model (${config.provider}/${config.model}) is available. ` +
-          "When you encounter a difficult problem or are unsure how to proceed, use the ask_advisor tool " +
-          "to get expert guidance. The advisor has full access to the conversation context but cannot make changes — " +
-          "it will provide advice for you to act on.",
+        `A more capable advisor model (${config.provider}/${config.model}) is available. When you encounter a difficult problem or are unsure how to proceed, use the ask_advisor tool to get expert guidance. The advisor has full access to the conversation context but cannot make changes — it will provide advice for you to act on.`,
+        "",
+        "**Proactively use ask_advisor when:**",
+        "- You've tried 2+ approaches and none have worked",
+        "- You're unsure about the best architectural decision or design pattern",
+        "- You're debugging a complex, hard-to-trace issue",
+        "- You're about to make a large or risky change and want a second opinion",
+        "- You find yourself going in circles or repeating the same steps",
+        "- The user's request is ambiguous or involves significant trade-offs",
+        "- You need help with a domain-specific problem (e.g., a framework or library you're less familiar with)",
+        "",
+        "The advisor is free to use — prefer asking for guidance over spinning your wheels. A 10-second advisor call can save minutes of fruitless effort.",
       ].join("\n");
 
       return {
