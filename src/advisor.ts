@@ -3,6 +3,7 @@ import { complete, type Message } from "@earendil-works/pi-ai";
 import {
   convertToLlm,
   serializeConversation,
+  type ModelRegistry,
   type SessionEntry,
 } from "@earendil-works/pi-coding-agent";
 import type { AdvisorConfig } from "./config.ts";
@@ -80,17 +81,7 @@ export async function callAdvisor(
   branch: SessionEntry[],
   question: string,
   signal: AbortSignal,
-  modelRegistry: {
-    find(
-      provider: string,
-      id: string,
-    ): { provider: string; id: string; api: string } | undefined;
-    getApiKeyAndHeaders(model: {
-      provider: string;
-      id: string;
-      api: string;
-    }): Promise<{ ok: boolean; apiKey?: string; error?: string; headers?: Record<string, string> }>;
-  },
+  modelRegistry: ModelRegistry,
 ): Promise<AdvisorResult> {
   const model = modelRegistry.find(config.provider, config.model);
   if (!model) {

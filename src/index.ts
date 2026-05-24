@@ -1,4 +1,5 @@
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { Api, Model } from "@earendil-works/pi-ai";
+import type { ExtensionAPI, ExtensionContext, ModelRegistry } from "@earendil-works/pi-coding-agent";
 import { BorderedLoader, type SessionEntry } from "@earendil-works/pi-coding-agent";
 import { Text, Container, Spacer } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
@@ -134,19 +135,11 @@ export default function (pi: ExtensionAPI) {
   // ── Config setup flow ─────────────────────────────────────────
 
   async function setupAdvisorConfig(ctx: ExtensionContext) {
-    let availableModels: Array<{ provider: string; id: string; name?: string }> = [];
+    let models: Model<Api>[] = [];
 
-    // Try to reuse pi's already-configured models
+    // Reuse pi's already-configured models
     try {
-      const registry = ctx.modelRegistry as any;
-      if (typeof registry.getAvailable === "function") {
-        const available = await registry.getAvailable();
-        availableModels = (available as any[]).map((m: any) => ({
-          provider: m.provider || "unknown",
-          id: m.id,
-          name: m.name,
-        }));
-      }
+      models = ctx.modelRegistry.getAvailable();
     } catch {
       // Fall back to manual entry
     }
@@ -154,12 +147,12 @@ export default function (pi: ExtensionAPI) {
     let provider: string;
     let model: string;
 
-    if (availableModels.length > 0) {
-      // Group by provider and present options
-      const choices = availableModels.map((m) => ({
+    if (models.length > 0) {
+      // Present models in a select list
+      const choices = models.map((m) => ({
         value: `${m.provider}/${m.id}`,
         label: m.name ? `${m.name} (${m.provider}/${m.id})` : `${m.provider}/${m.id}`,
-        description: m.provider,
+        description: `${m.provider} — context: ${m.contextWindow.toLocaleString()}`,
       }));
       choices.push({ value: "__custom__", label: "Other (enter manually)...", description: "" });
 
@@ -172,9 +165,9 @@ export default function (pi: ExtensionAPI) {
         model = (await ctx.ui.input(`Model ID for ${provider}:`, "e.g. claude-sonnet-4-5")) ?? "";
         if (!model) return;
       } else {
-        const [p, m] = choice.split("/");
-        provider = p;
-        model = m;
+        const slashIdx = choice.lastIndexOf("/");
+        provider = choice.slice(0, slashIdx);
+        model = choice.slice(slashIdx + 1);
       }
     } else {
       // No models available from registry, fall back to manual entry
