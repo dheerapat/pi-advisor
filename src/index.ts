@@ -150,28 +150,27 @@ export default function (pi: ExtensionAPI) {
     }
 
     const thinkingChoices = [
-      { value: "__default__", label: "default (model default)" },
-      { value: "off", label: "off" },
-      { value: "minimal", label: "minimal" },
-      { value: "low", label: "low" },
-      { value: "medium", label: "medium" },
-      { value: "high", label: "high" },
-      { value: "xhigh", label: "xhigh" },
+      "__default__ (model default)",
+      "off",
+      "minimal",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
     ];
     const thinkingChoice = await ctx.ui.select(
       "Select thinking level:",
       thinkingChoices,
     );
     if (thinkingChoice === undefined) return; // user cancelled
-    const thinkingValue = typeof thinkingChoice === "string" ? thinkingChoice : (thinkingChoice as any)?.value;
+    const thinkingValue = thinkingChoice.split(" ")[0];
 
     const scopeSelection = await ctx.ui.select("Save to:", [
-      { value: "project", label: "Project (.pi/advisor.json)" },
-      { value: "global", label: "Global (~/.pi/agent/advisor.json)" },
+      "project (.pi/advisor.json)",
+      "global (~/.pi/agent/advisor.json)",
     ]);
     if (!scopeSelection) return;
-    const scope = typeof scopeSelection === "string" ? scopeSelection : (scopeSelection as any)?.value;
-    if (!scope) return;
+    const scope = scopeSelection.startsWith("project") ? "project" : "global";
 
     const newConfig: AdvisorConfig = {
       provider,
@@ -351,12 +350,15 @@ export default function (pi: ExtensionAPI) {
   pi.registerMessageRenderer("advisor", (message, options, theme) => {
     const { expanded } = options;
     const modelName = (message.details as any)?.model || "advisor";
+    const contentText = typeof message.content === "string"
+      ? message.content
+      : message.content.map(c => c.type === "text" ? c.text : "").join("");
 
     if (expanded) {
       let text =
         theme.fg("accent", theme.bold(`💡 Advisor (${modelName})`)) +
         "\n\n" +
-        theme.fg("toolOutput", message.content);
+        theme.fg("toolOutput", contentText);
 
       if ((message.details as any)?.usage) {
         const u = (message.details as any).usage;
@@ -369,9 +371,9 @@ export default function (pi: ExtensionAPI) {
     }
 
     const preview =
-      message.content.length > 150
-        ? `${message.content.slice(0, 150)}...`
-        : message.content;
+      contentText.length > 150
+        ? `${contentText.slice(0, 150)}...`
+        : contentText;
     return new Text(
       theme.fg("accent", theme.bold(`💡 Advisor (${modelName})`)) +
         "\n" +

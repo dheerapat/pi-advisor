@@ -51,7 +51,7 @@ export function loadConfig(cwd: string): AdvisorConfig | null {
     }
   }
 
-  const merged = { ...globalConfig, ...projectConfig };
+  const merged: AdvisorConfig = { ...globalConfig, ...projectConfig } as AdvisorConfig;
 
   if (!merged.provider || !merged.model) {
     return null;
