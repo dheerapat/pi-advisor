@@ -8,7 +8,7 @@
   "type": "module",
   "pi": {
     "extensions": [
-      "./src/index.ts"
+      "./extensions/advisor/index.ts"
     ]
   },
   "peerDependencies": {
