@@ -17,7 +17,7 @@ The advisor's response is injected into the conversation so your working model c
 ## Installation
 
 ```bash
-pi install git:github.com/dheeto/pi-advisor
+pi install git:github.com/dheerapat/pi-advisor
 ```
 
 ## Configuration
@@ -29,6 +29,7 @@ Run the interactive setup:
 ```
 
 This will prompt you to select:
+
 - Provider (e.g., `anthropic`, `openai`)
 - Model (e.g., `claude-sonnet-4-5`)
 - Thinking level (optional)
@@ -46,19 +47,19 @@ Or create the config file manually:
 
 ### Config files
 
-| File | Scope |
-|------|-------|
-| `~/.pi/agent/advisor.json` | Global (all projects) |
-| `.pi/advisor.json` | Project-local (overrides global) |
+| File                       | Scope                            |
+| -------------------------- | -------------------------------- |
+| `~/.pi/agent/advisor.json` | Global (all projects)            |
+| `.pi/advisor.json`         | Project-local (overrides global) |
 
 ### Options
 
-| Key | Required | Description |
-|-----|----------|-------------|
-| `provider` | Yes | Provider ID (e.g., `anthropic`, `openai`) |
-| `model` | Yes | Model ID (e.g., `claude-sonnet-4-5`) |
-| `thinkingLevel` | No | `off`, `minimal`, `low`, `medium`, `high`, `xhigh` |
-| `systemPrompt` | No | Custom system prompt for the advisor |
+| Key             | Required | Description                                        |
+| --------------- | -------- | -------------------------------------------------- |
+| `provider`      | Yes      | Provider ID (e.g., `anthropic`, `openai`)          |
+| `model`         | Yes      | Model ID (e.g., `claude-sonnet-4-5`)               |
+| `thinkingLevel` | No       | `off`, `minimal`, `low`, `medium`, `high`, `xhigh` |
+| `systemPrompt`  | No       | Custom system prompt for the advisor               |
 
 ## Usage
 
