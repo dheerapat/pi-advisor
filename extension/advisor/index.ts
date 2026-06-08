@@ -1,6 +1,6 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { BorderedLoader, type SessionEntry } from "@earendil-works/pi-coding-agent";
-import { Text, Container, Spacer } from "@earendil-works/pi-tui";
+import { Box, Text, Container, Spacer } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import {
   loadConfig,
@@ -258,8 +258,6 @@ export default function (pi: ExtensionAPI) {
           ctx.modelRegistry,
         );
 
-        injectAdvice(result, params.question);
-
         return {
           content: [{ type: "text", text: result.text }],
           details: {
@@ -365,17 +363,15 @@ export default function (pi: ExtensionAPI) {
 
     // Build usage footer
     const usageFooter = (message.details as any)?.usage
-      ? `\n\n${theme.fg("dim", `↑${(message.details as any).usage.input} · ↓${(message.details as any).usage.output} · $${(message.details as any).usage.cost.toFixed(4)}`)}`
+      ? `\n${theme.fg("dim", `↑${(message.details as any).usage.input} · ↓${(message.details as any).usage.output} · $${(message.details as any).usage.cost.toFixed(4)}`)}`
       : "";
 
-    if (expanded) {
-      let text =
-        theme.fg("accent", theme.bold(`💡 Advisor (${modelName})`)) +
-        "\n\n" +
-        theme.fg("toolOutput", contentText) +
-        usageFooter;
+    const header = theme.fg("customMessageLabel", theme.bold(`💡 Advisor (${modelName})`));
 
-      return new Text(text, 0, 0);
+    if (expanded) {
+      const box = new Box(1, 1, (t) => theme.bg("customMessageBg", t));
+      box.addChild(new Text(header + "\n\n" + theme.fg("customMessageText", contentText) + usageFooter, 0, 0));
+      return box;
     }
 
     // Collapsed: show generous preview with expand hint
@@ -388,10 +384,7 @@ export default function (pi: ExtensionAPI) {
       isTruncated = true;
     }
 
-    let collapsedText =
-      theme.fg("accent", theme.bold(`💡 Advisor (${modelName})`)) +
-      "\n" +
-      theme.fg("toolOutput", preview);
+    let collapsedText = header + "\n" + theme.fg("customMessageText", preview);
 
     if (isTruncated) {
       collapsedText += "\n" + theme.fg("muted", "(Ctrl+O to expand)");
@@ -399,7 +392,9 @@ export default function (pi: ExtensionAPI) {
 
     collapsedText += usageFooter;
 
-    return new Text(collapsedText, 0, 0);
+    const box = new Box(1, 1, (t) => theme.bg("customMessageBg", t));
+    box.addChild(new Text(collapsedText, 0, 0));
+    return box;
   });
 
   // ── Lifecycle ──────────────────────────────────────────────────

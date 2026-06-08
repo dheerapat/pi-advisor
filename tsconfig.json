@@ -11,5 +11,5 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true
   },
-  "include": ["extensions/**/*.ts"]
+  "include": ["extension/**/*.ts"]
 }
