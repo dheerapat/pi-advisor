@@ -22,7 +22,7 @@ export default function (pi: ExtensionAPI) {
     if (config) {
       ctx.ui.setStatus(
         "advisor",
-        ctx.ui.theme.fg("accent", `advisor:${config.provider}/${config.model}`),
+        ctx.ui.theme.fg("success", "●") + ` Advisor: ${config.provider}/${config.model}`,
       );
     } else {
       ctx.ui.setStatus("advisor", undefined);
