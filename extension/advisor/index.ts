@@ -1,6 +1,6 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { BorderedLoader, type SessionEntry } from "@earendil-works/pi-coding-agent";
-import { Box, Text, Container, Spacer } from "@earendil-works/pi-tui";
+import { BorderedLoader, getMarkdownTheme, type SessionEntry } from "@earendil-works/pi-coding-agent";
+import { Box, Markdown, Text, Container, Spacer } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import {
   loadConfig,
@@ -311,7 +311,7 @@ export default function (pi: ExtensionAPI) {
 
         container.addChild(new Spacer(1));
         container.addChild(new Text(theme.fg("muted", "─── Advice ───"), 0, 0));
-        container.addChild(new Text(text, 0, 0));
+        container.addChild(new Markdown(text, 0, 0, getMarkdownTheme()));
 
         if (details?.usage) {
           container.addChild(new Spacer(1));
@@ -370,7 +370,12 @@ export default function (pi: ExtensionAPI) {
 
     if (expanded) {
       const box = new Box(1, 1, (t) => theme.bg("customMessageBg", t));
-      box.addChild(new Text(header + "\n\n" + theme.fg("customMessageText", contentText) + usageFooter, 0, 0));
+      box.addChild(new Text(header, 0, 0));
+      box.addChild(new Spacer(1));
+      box.addChild(new Markdown(contentText, 0, 0, getMarkdownTheme()));
+      if (usageFooter) {
+        box.addChild(new Text(usageFooter, 0, 0));
+      }
       return box;
     }
 
