@@ -48,19 +48,14 @@ export default function (pi: ExtensionAPI) {
     });
   }
 
-  // ── /advise command ────────────────────────────────────────────
+  // ── /advisor:ask command ────────────────────────────────────────
 
-  pi.registerCommand("advise", {
-    description: "Ask the advisor model for guidance on the current problem. Use 'describe' to get a fresh pair of eyes on the conversation.",
+  pi.registerCommand("advisor:ask", {
+    description: "Ask the advisor model for guidance on the current problem.",
     handler: async (args, ctx) => {
       const trimmed = args?.trim() || "";
 
       let question = trimmed;
-
-      // /advise describe — send a generic review prompt
-      if (trimmed === "describe") {
-        question = "Review the conversation above. What is the user trying to accomplish? What's the current state? Are there any issues, edge cases, or improvements you can spot? Provide a fresh perspective on the overall situation.";
-      }
 
       if (!question) {
         question =
@@ -72,7 +67,7 @@ export default function (pi: ExtensionAPI) {
       }
 
       if (!config) {
-        ctx.ui.notify("No advisor configured. Run /advisor config to set up.", "error");
+        ctx.ui.notify("No advisor configured. Run /advisor:config to set up.", "error");
         return;
       }
 
@@ -104,37 +99,90 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
-  // ── /advisor command (config management) ───────────────────────
+  // ── /advisor:describe command ───────────────────────────────────
+
+  pi.registerCommand("advisor:describe", {
+    description: "Get a fresh pair of eyes on the conversation. Sends a generic review prompt to the advisor.",
+    handler: async (_args, ctx) => {
+      const question = "Review the conversation above. What is the user trying to accomplish? What's the current state? Are there any issues, edge cases, or improvements you can spot? Provide a fresh perspective on the overall situation.";
+
+      if (!config) {
+        ctx.ui.notify("No advisor configured. Run /advisor:config to set up.", "error");
+        return;
+      }
+
+      const branch = ctx.sessionManager.getBranch() as SessionEntry[];
+
+      const result = await ctx.ui.custom<AdvisorResult | null>((tui, theme, _kb, done) => {
+        const loader = new BorderedLoader(
+          tui,
+          theme,
+          `Asking advisor (${config!.provider}/${config!.model})...`,
+        );
+        loader.onAbort = () => done(null);
+
+        callAdvisor(config!, branch, question, loader.signal, ctx.modelRegistry)
+          .then(done)
+          .catch((err: any) => {
+            console.error("Advisor call failed:", err);
+            done({ text: `Error: ${err.message}`, usage: undefined });
+          });
+
+        return loader;
+      });
+
+      if (!result) return;
+
+      injectAdvice(result, question);
+      ctx.ui.notify(`Advisor responded`, "info");
+      updateStatus(ctx);
+    },
+  });
+
+  // ── /advisor command (help) ─────────────────────────────────────
 
   pi.registerCommand("advisor", {
-    description: "Configure or check advisor model settings",
-    handler: async (args, ctx) => {
-      const sub = args?.trim() || "";
+    description: "Show available advisor commands. Use /advisor:<action> for specific operations.",
+    handler: async (_args, ctx) => {
+      ctx.ui.notify([
+        "Available advisor commands:",
+        "",
+        "  /advisor:ask       Ask the advisor a question",
+        "  /advisor:describe  Get a fresh pair of eyes on the conversation",
+        "  /advisor:status    Show current advisor configuration",
+        "  /advisor:config    Run interactive setup",
+      ].join("\n"), "info");
+    },
+  });
 
-      if (sub === "status" || sub === "show" || sub === "") {
-        if (config) {
-          const info = [
-            `provider: ${config.provider}`,
-            `model: ${config.model}`,
-            `thinking: ${config.thinkingLevel || "default"}`,
-            `systemPrompt: ${config.systemPrompt ? "custom" : "default"}`,
-          ];
-          ctx.ui.notify(info.join(" · "), "info");
-        } else {
-          ctx.ui.notify(
-            "No advisor configured. Use /advisor config to set up.",
-            "warning",
-          );
-        }
-        return;
+  // ── /advisor:status command ─────────────────────────────────────
+
+  pi.registerCommand("advisor:status", {
+    description: "Show the current advisor configuration",
+    handler: async (_args, ctx) => {
+      if (config) {
+        const info = [
+          `provider: ${config.provider}`,
+          `model: ${config.model}`,
+          `thinking: ${config.thinkingLevel || "default"}`,
+          `systemPrompt: ${config.systemPrompt ? "custom" : "default"}`,
+        ];
+        ctx.ui.notify(info.join(" · "), "info");
+      } else {
+        ctx.ui.notify(
+          "No advisor configured. Use /advisor:config to set up.",
+          "warning",
+        );
       }
+    },
+  });
 
-      if (sub === "config" || sub === "setup") {
-        await setupAdvisorConfig(ctx);
-        return;
-      }
+  // ── /advisor:config command ─────────────────────────────────────
 
-      ctx.ui.notify("Usage: /advisor [status|config]", "warning");
+  pi.registerCommand("advisor:config", {
+    description: "Run interactive advisor setup (select model, thinking level, scope)",
+    handler: async (_args, ctx) => {
+      await setupAdvisorConfig(ctx);
     },
   });
 
@@ -374,7 +422,7 @@ export default function (pi: ExtensionAPI) {
           content: [
             {
               type: "text",
-              text: "No advisor configured. Tell the user to run /advisor config to set up an advisor model.",
+              text: "No advisor configured. Tell the user to run /advisor:config to set up an advisor model.",
             },
           ],
           details: {},

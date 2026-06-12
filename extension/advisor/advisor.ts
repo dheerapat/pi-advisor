@@ -136,7 +136,7 @@ export async function callAdvisor(
   const model = modelRegistry.find(config.provider, config.model);
   if (!model) {
     throw new Error(
-      `Advisor model ${config.provider}/${config.model} not found. Check your config or run /advisor config.`,
+      `Advisor model ${config.provider}/${config.model} not found. Check your config or run /advisor:config.`,
     );
   }
 
