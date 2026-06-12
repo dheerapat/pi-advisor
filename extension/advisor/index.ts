@@ -1,6 +1,6 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { BorderedLoader, getMarkdownTheme, type SessionEntry } from "@earendil-works/pi-coding-agent";
-import { Box, Markdown, Text, Container, Spacer } from "@earendil-works/pi-tui";
+import { BorderedLoader, getMarkdownTheme, type SessionEntry, DynamicBorder } from "@earendil-works/pi-coding-agent";
+import { Box, Markdown, Text, Container, Spacer, SelectList, type SelectItem } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import {
   loadConfig,
@@ -141,17 +141,113 @@ export default function (pi: ExtensionAPI) {
   // ── Config setup flow ─────────────────────────────────────────
 
   async function setupAdvisorConfig(ctx: ExtensionContext) {
-    const provider = (await ctx.ui.input("Advisor provider:", "e.g. anthropic, openai")) ?? "";
-    if (!provider) return;
+    // ── Model selector: show all models from registry ───────────────
+    const allModels = ctx.modelRegistry.getAll();
 
-    const model = (await ctx.ui.input(`Model ID for ${provider}:`, "e.g. claude-sonnet-4-5")) ?? "";
-    if (!model) return;
+    let selectedProvider: string | undefined;
+    let selectedModelId: string | undefined;
 
-    const found = ctx.modelRegistry.find(provider, model);
+    if (allModels.length > 0) {
+      const items: SelectItem[] = allModels.map((m) => ({
+        value: `${m.provider}|${m.id}`,
+        label: `${m.provider}/${m.id}`,
+        description:
+          m.name && m.name !== m.id
+            ? m.name
+            : undefined,
+      }));
+
+      const result = await ctx.ui.custom<string | null>(
+        (tui, theme, _kb, done) => {
+          const container = new Container();
+
+          // Top border
+          container.addChild(
+            new DynamicBorder((s: string) => theme.fg("accent", s)),
+          );
+
+          // Title
+          container.addChild(
+            new Text(
+              theme.fg("accent", theme.bold("Select Advisor Model")),
+              1,
+              1,
+            ),
+          );
+
+          // Help text
+          container.addChild(
+            new Text(
+              theme.fg("dim", "↑↓ navigate  ·  enter select  ·  esc manual input  ·  type to filter"),
+              1,
+              0,
+            ),
+          );
+
+          // SelectList
+          const selectList = new SelectList(
+            items,
+            Math.min(items.length, 10),
+            {
+              selectedPrefix: (t) => theme.fg("accent", t),
+              selectedText: (t) => theme.fg("accent", t),
+              description: (t) => theme.fg("muted", t),
+              scrollInfo: (t) => theme.fg("dim", t),
+              noMatch: (t) => theme.fg("warning", t),
+            },
+          );
+          selectList.onSelect = (item) => done(item.value);
+          selectList.onCancel = () => done(null);
+          container.addChild(selectList);
+
+          // Bottom spacer
+          container.addChild(new Spacer(1));
+
+          // Bottom border
+          container.addChild(
+            new DynamicBorder((s: string) => theme.fg("accent", s)),
+          );
+
+          return {
+            render: (w) => container.render(w),
+            invalidate: () => container.invalidate(),
+            handleInput: (data) => {
+              selectList.handleInput(data);
+              tui.requestRender();
+            },
+          };
+        },
+      );
+
+      if (result) {
+        const pipeIndex = result.indexOf("|");
+        selectedProvider = result.slice(0, pipeIndex);
+        selectedModelId = result.slice(pipeIndex + 1);
+      }
+      // If cancelled (Esc), fall through to manual input
+    }
+
+    // ── Manual input fallback ───────────────────────────────────────
+    if (!selectedProvider) {
+      selectedProvider =
+        (await ctx.ui.input("Advisor provider:", "e.g. anthropic, opencode-go")) ?? "";
+      if (!selectedProvider) return;
+    }
+
+    if (!selectedModelId) {
+      selectedModelId =
+        (await ctx.ui.input(
+          `Model ID for ${selectedProvider}:`,
+          "e.g. claude-sonnet-4-5",
+        )) ?? "";
+      if (!selectedModelId) return;
+    }
+
+    const found = ctx.modelRegistry.find(selectedProvider, selectedModelId);
     if (!found) {
       const proceed = await ctx.ui.confirm(
         "Model not found",
-        `${provider}/${model} was not found in the model registry. Save anyway?`,
+        `${selectedProvider}/${selectedModelId} was not found in the model registry. Save anyway?`,
       );
       if (!proceed) return;
     }
@@ -180,8 +276,8 @@ export default function (pi: ExtensionAPI) {
     const scope = scopeSelection.startsWith("project") ? "project" : "global";
 
     const newConfig: AdvisorConfig = {
-      provider,
-      model,
+      provider: selectedProvider,
+      model: selectedModelId,
     };
     if (thinkingValue && thinkingValue !== "__default__") {
       newConfig.thinkingLevel = thinkingValue as AdvisorConfig["thinkingLevel"];
@@ -205,7 +301,7 @@ export default function (pi: ExtensionAPI) {
     config = newConfig;
     updateStatus(ctx);
 
-    ctx.ui.notify(`Advisor configured: ${provider}/${model} (${scope})`, "info");
+    ctx.ui.notify(`Advisor configured: ${selectedProvider}/${selectedModelId} (${scope})`, "info");
   }
 
   // ── ask_advisor tool (callable by LLM) ─────────────────────────
