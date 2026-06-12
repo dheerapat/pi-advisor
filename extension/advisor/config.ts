@@ -19,6 +19,7 @@ export const AdvisorConfigSchema = Type.Object({
   ),
   systemPrompt: Type.Optional(Type.String()),
   maxContextMessages: Type.Optional(Type.Number({ minimum: 1 })),
+  enabled: Type.Optional(Type.Boolean()),
 });
 
 export type AdvisorConfig = Static<typeof AdvisorConfigSchema>;
@@ -54,12 +55,18 @@ function validateConfigShape(raw: unknown, label: string): AdvisorConfig | null 
   return raw as AdvisorConfig;
 }
 
+export interface LoadConfigResult {
+  config: AdvisorConfig | null;
+  configPath: string | null;
+}
+
 /**
  * Load advisor config from global and project-local JSON files.
  * If a valid project `.pi/advisor.json` exists, it is used exclusively
  * and the global config is ignored entirely.
+ * Returns the loaded config and which file it came from.
  */
-export function loadConfig(cwd: string): AdvisorConfig | null {
+export function loadConfig(cwd: string): LoadConfigResult {
   const globalPath = join(getAgentDir(), "advisor.json");
   const projectPath = join(cwd, ".pi", "advisor.json");
 
@@ -69,7 +76,7 @@ export function loadConfig(cwd: string): AdvisorConfig | null {
       const raw = JSON.parse(readFileSync(projectPath, "utf-8"));
       const parsed = validateConfigShape(raw, "project");
       if (parsed && parsed.provider && parsed.model) {
-        return parsed;
+        return { config: parsed, configPath: projectPath };
       }
     } catch (err) {
       console.error(`Failed to parse ${projectPath}:`, err);
@@ -83,14 +90,14 @@ export function loadConfig(cwd: string): AdvisorConfig | null {
       const raw = JSON.parse(readFileSync(globalPath, "utf-8"));
       const parsed = validateConfigShape(raw, "global");
       if (parsed && parsed.provider && parsed.model) {
-        return parsed;
+        return { config: parsed, configPath: globalPath };
       }
     } catch (err) {
       console.error(`Failed to parse ${globalPath}:`, err);
     }
   }
 
-  return null;
+  return { config: null, configPath: null };
 }
 
 export function saveConfig(

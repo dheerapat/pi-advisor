@@ -6,27 +6,28 @@ import {
   loadConfig,
   saveConfig,
   type AdvisorConfig,
+  type LoadConfigResult,
 } from "./config.ts";
 import { callAdvisor, type AdvisorResult } from "./advisor.ts";
 
 export default function (pi: ExtensionAPI) {
   let config: AdvisorConfig | null = null;
   let configFilePath: string | null = null;
-  let disabled = false;
 
   function refreshConfig(cwd: string) {
-    config = loadConfig(cwd);
-    disabled = false;
+    const result = loadConfig(cwd);
+    config = result.config;
+    configFilePath = result.configPath;
     return config;
   }
 
   function updateStatus(ctx: ExtensionContext) {
-    if (config && !disabled) {
+    if (config && config.enabled !== false) {
       ctx.ui.setStatus(
         "advisor",
         ctx.ui.theme.fg("success", "●") + ` Advisor: ${config.provider}/${config.model}`,
       );
-    } else if (config && disabled) {
+    } else if (config && config.enabled === false) {
       ctx.ui.setStatus(
         "advisor",
         ctx.ui.theme.fg("error", "●") + " Advisor: disabled",
@@ -80,7 +81,7 @@ export default function (pi: ExtensionAPI) {
         ctx.ui.notify("No advisor configured. Run /advisor:config to set up.", "error");
         return;
       }
-      if (disabled) {
+      if (config.enabled === false) {
         ctx.ui.notify("Advisor is disabled. Run /advisor:enable to re-enable.", "error");
         return;
       }
@@ -124,7 +125,7 @@ export default function (pi: ExtensionAPI) {
         ctx.ui.notify("No advisor configured. Run /advisor:config to set up.", "error");
         return;
       }
-      if (disabled) {
+      if (config.enabled === false) {
         ctx.ui.notify("Advisor is disabled. Run /advisor:enable to re-enable.", "error");
         return;
       }
@@ -215,7 +216,10 @@ export default function (pi: ExtensionAPI) {
         ctx.ui.notify("Advisor is not configured. Run /advisor:config to set up.", "warning");
         return;
       }
-      disabled = true;
+      config.enabled = false;
+      if (configFilePath) {
+        saveConfig(configFilePath, config);
+      }
       updateStatus(ctx);
       ctx.ui.notify("Advisor disabled. Run /advisor:enable to re-enable, or /advisor:config to reconfigure.", "info");
     },
@@ -230,7 +234,10 @@ export default function (pi: ExtensionAPI) {
         ctx.ui.notify("Advisor is not configured. Run /advisor:config to set up.", "warning");
         return;
       }
-      disabled = false;
+      config.enabled = true;
+      if (configFilePath) {
+        saveConfig(configFilePath, config);
+      }
       updateStatus(ctx);
       ctx.ui.notify("Advisor re-enabled.", "info");
     },
@@ -414,6 +421,7 @@ export default function (pi: ExtensionAPI) {
     const newConfig: AdvisorConfig = {
       provider: selectedProvider,
       model: selectedModelId,
+      enabled: true,
     };
     if (thinkingValue && thinkingValue !== "__default__") {
       newConfig.thinkingLevel = thinkingValue as AdvisorConfig["thinkingLevel"];
@@ -435,7 +443,6 @@ export default function (pi: ExtensionAPI) {
 
     saveConfig(configFilePath, newConfig);
     config = newConfig;
-    disabled = false;
     updateStatus(ctx);
 
     ctx.ui.notify(`Advisor configured: ${selectedProvider}/${selectedModelId} (${scope})`, "info");
@@ -479,7 +486,7 @@ export default function (pi: ExtensionAPI) {
           details: {},
         };
       }
-      if (disabled) {
+      if (config.enabled === false) {
         return {
           content: [
             {
@@ -654,7 +661,7 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.on("before_agent_start", async (event) => {
-    if (config && !disabled) {
+    if (config && config.enabled !== false) {
       const advisorHint = [
         "",
         "## Advisor Available",
