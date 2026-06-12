@@ -149,7 +149,7 @@ export default function (pi: ExtensionAPI) {
 
     if (allModels.length > 0) {
       const items: SelectItem[] = allModels.map((m) => ({
-        value: `${m.provider}|${m.id}`,
+        value: `${m.provider}/${m.id}`,
         label: `${m.provider}/${m.id}`,
         description:
           m.name && m.name !== m.id
@@ -253,9 +253,14 @@ export default function (pi: ExtensionAPI) {
       );
 
       if (result) {
-        const pipeIndex = result.indexOf("|");
-        selectedProvider = result.slice(0, pipeIndex);
-        selectedModelId = result.slice(pipeIndex + 1);
+        // Find which model matches the selected "provider/model" string
+        const selected = allModels.find(
+          (m) => `${m.provider}/${m.id}` === result,
+        );
+        if (selected) {
+          selectedProvider = selected.provider;
+          selectedModelId = selected.id;
+        }
       }
       // If cancelled (Esc), fall through to manual input
     }
