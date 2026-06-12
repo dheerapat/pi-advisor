@@ -1,6 +1,6 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { BorderedLoader, getMarkdownTheme, type SessionEntry, DynamicBorder } from "@earendil-works/pi-coding-agent";
-import { Box, Markdown, Text, Container, Spacer, SelectList, type SelectItem } from "@earendil-works/pi-tui";
+import { Box, Markdown, Text, Container, Spacer, SelectList, type SelectItem, matchesKey, Key } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import {
   loadConfig,
@@ -141,8 +141,8 @@ export default function (pi: ExtensionAPI) {
   // ── Config setup flow ─────────────────────────────────────────
 
   async function setupAdvisorConfig(ctx: ExtensionContext) {
-    // ── Model selector: show all models from registry ───────────────
-    const allModels = ctx.modelRegistry.getAll();
+    // ── Model selector: show available (configured) models ───────────
+    const allModels = ctx.modelRegistry.getAvailable();
 
     let selectedProvider: string | undefined;
     let selectedModelId: string | undefined;
@@ -160,20 +160,20 @@ export default function (pi: ExtensionAPI) {
       const result = await ctx.ui.custom<string | null>(
         (tui, theme, _kb, done) => {
           const container = new Container();
+          let filterText = "";
 
           // Top border
           container.addChild(
             new DynamicBorder((s: string) => theme.fg("accent", s)),
           );
 
-          // Title
-          container.addChild(
-            new Text(
-              theme.fg("accent", theme.bold("Select Advisor Model")),
-              1,
-              1,
-            ),
+          // Title (dynamic — shows filter when typing)
+          const titleText = new Text(
+            theme.fg("accent", theme.bold("Select Advisor Model")),
+            1,
+            1,
           );
+          container.addChild(titleText);
 
           // Help text
           container.addChild(
@@ -208,10 +208,43 @@ export default function (pi: ExtensionAPI) {
             new DynamicBorder((s: string) => theme.fg("accent", s)),
           );
 
+          function updateFilterDisplay() {
+            if (filterText) {
+              titleText.setText(
+                theme.fg("accent", theme.bold("Select Advisor Model")) +
+                  "  " +
+                  theme.fg("muted", `[filter: ${filterText}▌]`),
+              );
+            } else {
+              titleText.setText(
+                theme.fg("accent", theme.bold("Select Advisor Model")),
+              );
+            }
+          }
+
           return {
             render: (w) => container.render(w),
             invalidate: () => container.invalidate(),
             handleInput: (data) => {
+              // Backspace — remove last filter char
+              if (matchesKey(data, Key.backspace)) {
+                filterText = filterText.slice(0, -1);
+                selectList.setFilter(filterText);
+                updateFilterDisplay();
+                tui.requestRender();
+                return;
+              }
+
+              // Printable ASCII chars — add to filter
+              if (data.length === 1 && data.charCodeAt(0) >= 32 && data.charCodeAt(0) <= 126) {
+                filterText += data;
+                selectList.setFilter(filterText);
+                updateFilterDisplay();
+                tui.requestRender();
+                return;
+              }
+
+              // Delegate navigation / selection to SelectList
               selectList.handleInput(data);
               tui.requestRender();
             },
