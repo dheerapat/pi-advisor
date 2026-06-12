@@ -56,44 +56,41 @@ function validateConfigShape(raw: unknown, label: string): AdvisorConfig | null 
 
 /**
  * Load advisor config from global and project-local JSON files.
- * Project-local overrides global.
+ * If a valid project `.pi/advisor.json` exists, it is used exclusively
+ * and the global config is ignored entirely.
  */
 export function loadConfig(cwd: string): AdvisorConfig | null {
   const globalPath = join(getAgentDir(), "advisor.json");
   const projectPath = join(cwd, ".pi", "advisor.json");
 
-  let globalConfig: AdvisorConfig | null = null;
-  let projectConfig: AdvisorConfig | null = null;
+  // Project config exists → use it exclusively, ignore global
+  if (existsSync(projectPath)) {
+    try {
+      const raw = JSON.parse(readFileSync(projectPath, "utf-8"));
+      const parsed = validateConfigShape(raw, "project");
+      if (parsed && parsed.provider && parsed.model) {
+        return parsed;
+      }
+    } catch (err) {
+      console.error(`Failed to parse ${projectPath}:`, err);
+    }
+    // If project config is invalid/missing fields, fall through to global
+  }
 
+  // No project config (or it was invalid) — try global
   if (existsSync(globalPath)) {
     try {
       const raw = JSON.parse(readFileSync(globalPath, "utf-8"));
-      globalConfig = validateConfigShape(raw, "global");
+      const parsed = validateConfigShape(raw, "global");
+      if (parsed && parsed.provider && parsed.model) {
+        return parsed;
+      }
     } catch (err) {
       console.error(`Failed to parse ${globalPath}:`, err);
     }
   }
 
-  if (existsSync(projectPath)) {
-    try {
-      const raw = JSON.parse(readFileSync(projectPath, "utf-8"));
-      projectConfig = validateConfigShape(raw, "project");
-    } catch (err) {
-      console.error(`Failed to parse ${projectPath}:`, err);
-    }
-  }
-
-  // Project config overrides global (already applied by spread)
-  const merged: AdvisorConfig = {
-    ...(globalConfig ?? {} as AdvisorConfig),
-    ...(projectConfig ?? {} as AdvisorConfig),
-  } as AdvisorConfig;
-
-  if (!merged.provider || !merged.model) {
-    return null;
-  }
-
-  return merged;
+  return null;
 }
 
 export function saveConfig(

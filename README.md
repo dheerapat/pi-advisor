@@ -51,7 +51,9 @@ Or create the config file manually:
 | File                       | Scope                            |
 | -------------------------- | -------------------------------- |
 | `~/.pi/agent/advisor.json` | Global (all projects)            |
-| `.pi/advisor.json`         | Project-local (overrides global) |
+| `.pi/advisor.json`         | Project-local (replaces global)  |
+
+When a valid `.pi/advisor.json` exists in the project, it is used **exclusively** — the global config is entirely ignored. This lets each project have its own independent advisor setup without any leakage from a global config.
 
 ### Options
 
@@ -107,6 +109,22 @@ Run the interactive setup to configure or reconfigure the advisor model.
 /advisor:config
 ```
 
+### `/advisor:disable`
+
+Disable the advisor mid-session. The status bar will show a **red dot** indicator. The LLM will no longer see the advisor hint or be able to call `ask_advisor`. Run `/advisor:enable` to re-enable.
+
+```
+/advisor:disable
+```
+
+### `/advisor:enable`
+
+Re-enable the advisor after disabling it.
+
+```
+/advisor:enable
+```
+
 ### `ask_advisor` tool
 
 The LLM can call this tool when it recognizes it's stuck. It formulates its own question and the advisor responds with guidance. The tool result renders inline in the TUI with expand/collapse and usage stats.
@@ -119,7 +137,13 @@ The LLM can call this tool when it recognizes it's stuck. It formulates its own 
 
 ## Status bar
 
-When configured, the status bar shows `advisor:<provider>/<model>` in the accent color.
+The status bar always shows an indicator for the advisor state:
+
+| State | Indicator |
+|-------|-----------|
+| Configured & enabled | `● Advisor: <provider>/<model>` (green) |
+| Configured but disabled | `● Advisor: disabled` (red) |
+| Not configured | `● No advisor` (red) |
 
 ## License
 

@@ -12,20 +12,30 @@ import { callAdvisor, type AdvisorResult } from "./advisor.ts";
 export default function (pi: ExtensionAPI) {
   let config: AdvisorConfig | null = null;
   let configFilePath: string | null = null;
+  let disabled = false;
 
   function refreshConfig(cwd: string) {
     config = loadConfig(cwd);
+    disabled = false;
     return config;
   }
 
   function updateStatus(ctx: ExtensionContext) {
-    if (config) {
+    if (config && !disabled) {
       ctx.ui.setStatus(
         "advisor",
         ctx.ui.theme.fg("success", "●") + ` Advisor: ${config.provider}/${config.model}`,
       );
+    } else if (config && disabled) {
+      ctx.ui.setStatus(
+        "advisor",
+        ctx.ui.theme.fg("error", "●") + " Advisor: disabled",
+      );
     } else {
-      ctx.ui.setStatus("advisor", undefined);
+      ctx.ui.setStatus(
+        "advisor",
+        ctx.ui.theme.fg("error", "●") + " No advisor",
+      );
     }
   }
 
@@ -70,6 +80,10 @@ export default function (pi: ExtensionAPI) {
         ctx.ui.notify("No advisor configured. Run /advisor:config to set up.", "error");
         return;
       }
+      if (disabled) {
+        ctx.ui.notify("Advisor is disabled. Run /advisor:enable to re-enable.", "error");
+        return;
+      }
 
       const branch = ctx.sessionManager.getBranch() as SessionEntry[];
 
@@ -108,6 +122,10 @@ export default function (pi: ExtensionAPI) {
 
       if (!config) {
         ctx.ui.notify("No advisor configured. Run /advisor:config to set up.", "error");
+        return;
+      }
+      if (disabled) {
+        ctx.ui.notify("Advisor is disabled. Run /advisor:enable to re-enable.", "error");
         return;
       }
 
@@ -151,6 +169,8 @@ export default function (pi: ExtensionAPI) {
         "  /advisor:describe  Get a fresh pair of eyes on the conversation",
         "  /advisor:status    Show current advisor configuration",
         "  /advisor:config    Run interactive setup",
+        "  /advisor:disable   Disable the advisor (red dot)",
+        "  /advisor:enable    Re-enable the advisor",
       ].join("\n"), "info");
     },
   });
@@ -183,6 +203,36 @@ export default function (pi: ExtensionAPI) {
     description: "Run interactive advisor setup (select model, thinking level, scope)",
     handler: async (_args, ctx) => {
       await setupAdvisorConfig(ctx);
+    },
+  });
+
+  // ── /advisor:disable command ─────────────────────────────────────
+
+  pi.registerCommand("advisor:disable", {
+    description: "Disable the advisor and show a red dot indicator in the status bar.",
+    handler: async (_args, ctx) => {
+      if (!config) {
+        ctx.ui.notify("Advisor is not configured. Run /advisor:config to set up.", "warning");
+        return;
+      }
+      disabled = true;
+      updateStatus(ctx);
+      ctx.ui.notify("Advisor disabled. Run /advisor:enable to re-enable, or /advisor:config to reconfigure.", "info");
+    },
+  });
+
+  // ── /advisor:enable command ──────────────────────────────────────
+
+  pi.registerCommand("advisor:enable", {
+    description: "Re-enable the advisor.",
+    handler: async (_args, ctx) => {
+      if (!config) {
+        ctx.ui.notify("Advisor is not configured. Run /advisor:config to set up.", "warning");
+        return;
+      }
+      disabled = false;
+      updateStatus(ctx);
+      ctx.ui.notify("Advisor re-enabled.", "info");
     },
   });
 
@@ -385,6 +435,7 @@ export default function (pi: ExtensionAPI) {
 
     saveConfig(configFilePath, newConfig);
     config = newConfig;
+    disabled = false;
     updateStatus(ctx);
 
     ctx.ui.notify(`Advisor configured: ${selectedProvider}/${selectedModelId} (${scope})`, "info");
@@ -423,6 +474,17 @@ export default function (pi: ExtensionAPI) {
             {
               type: "text",
               text: "No advisor configured. Tell the user to run /advisor:config to set up an advisor model.",
+            },
+          ],
+          details: {},
+        };
+      }
+      if (disabled) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: "The advisor is disabled. Tell the user to run /advisor:enable to re-enable it.",
             },
           ],
           details: {},
@@ -592,7 +654,7 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.on("before_agent_start", async (event) => {
-    if (config) {
+    if (config && !disabled) {
       const advisorHint = [
         "",
         "## Advisor Available",
