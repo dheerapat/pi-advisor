@@ -11,7 +11,7 @@
   "type": "module",
   "pi": {
     "extensions": [
-      "./extension/advisor/index.ts"
+      "./extensions/advisor/index.ts"
     ]
   },
   "peerDependencies": {
